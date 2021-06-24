@@ -1,0 +1,9 @@
+fastapi
+fastapi-sqlalchemy
+graphene
+graphene-sqlalchemy
+psycopg2
+pydantic-sqlalchemy
+sqlalchemy>=1.4.*
+starlette
+uvicorn
