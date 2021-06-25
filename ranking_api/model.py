@@ -1,11 +1,11 @@
 from collections import OrderedDict
 from enum import Enum
+
 from pydantic_sqlalchemy import sqlalchemy_to_pydantic
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float, \
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, \
     DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import ColumnProperty, relationship
 
 
@@ -95,9 +95,6 @@ class Game(Base):
     @property
     def format(self):
         return GameFormat(self.format_code)
-
-
-GameSchema = sqlalchemy_to_pydantic(Game)
 
 
 class Tournament(Base):
@@ -260,6 +257,7 @@ class PlayerRanking(Base):
     algorithm_params = Column(JSONB, default=dict)  # Non-mutable. Must assign to field.
 
 
+GameSchema = sqlalchemy_to_pydantic(Game)
 TournamentSchema = sqlalchemy_to_pydantic(Tournament)
 PlayerSchema = sqlalchemy_to_pydantic(Player)
 SetSchema = sqlalchemy_to_pydantic(Set)

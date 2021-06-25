@@ -5,7 +5,7 @@ from typing import List
 
 from ranking_api.db import get_connection_str
 from ranking_api.model import Tournament, TournamentSchema
-from ranking_api.routes.graphql import graphql_app
+from ranking_api.graphql.graphql_app import gql_app
 
 app = FastAPI()
 app.title = 'Odyssey Caravels - Ranking API'
@@ -22,4 +22,4 @@ async def api_tournaments():
     return db.session.query(Tournament).all()
 
 
-app.add_route("/graphql", graphql_app)
+app.add_route("/graphql", gql_app)
