@@ -2,7 +2,7 @@ from collections import OrderedDict
 from enum import Enum
 
 from pydantic_sqlalchemy import sqlalchemy_to_pydantic
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, \
+from sqlalchemy import Column, Integer, Text, ForeignKey, Float, \
     DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
@@ -75,11 +75,11 @@ class _Base(object):
 Base = declarative_base(cls=_Base)
 
 
-class TournamentState(Enum):
+class EventState(Enum):
     UNVERIFIED = 0
     VERIFIED_OK = 100
     VERIFIED_DATA_INCOMPLETE = -1  # Too much set/player data is missing. This is fixable
-    IGNORE = -99  # Tournament / Event is not suitable. Eg. A squad strike event
+    IGNORE = -99  # Event is not suitable. Eg. A squad strike event
 
 
 class GameFormat(Enum):
@@ -87,9 +87,18 @@ class GameFormat(Enum):
     DOUBLES = 2
 
 
+class SetState(Enum):
+    UNVERIFIED = 0  # At least one player is not a verified participant.
+    VERIFIED_OK = 100  # All participants are verified
+    ANONYMOUS = -1  # At least one player is an anonymous entry and cannot be linked to a Player.
+    # Anonymous entries have to be manually fixed.
+    IGNORE = -99  # Set is manually designated to be ignored.
+
+
 class Game(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
-    sgg_id = Column(Integer, nullable=True, index=True)  # tournament_id
+    sgg_id = Column(Integer, nullable=True, index=True)
+    name = Column(Text, nullable=False)
     format_code = Column(Integer, nullable=False)
 
     @property
@@ -97,19 +106,19 @@ class Game(Base):
         return GameFormat(self.format_code)
 
 
-class Tournament(Base):
+class Event(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
-    sgg_id = Column(Integer, nullable=True, index=True)  # tournament_id
-    sgg_event_id = Column(Integer, nullable=True, index=True)
+    sgg_tournament_id = Column(Integer, nullable=True, index=True)  # smashgg tournament_id
+    sgg_event_id = Column(Integer, nullable=True, index=True)  # smashgg event_id
     # Add other providers here (challonge, ...)
-    name = Column(String, nullable=False)
-    country = Column(String, nullable=True)
+    name = Column(Text, nullable=False)
+    type = Column(Text, nullable=True)  # Eg. singles, double elimination, round-robin, mixed, ...
+    country = Column(Text, nullable=True)
     end_date = Column(DateTime, nullable=False)
     num_entrants = Column(Integer, nullable=False)
-
     state_code = Column(Integer, nullable=True)
 
-    sets = relationship("Set", back_populates="tournament")
+    sets = relationship("Set", back_populates="event")
 
     @property
     def state(self):
@@ -117,15 +126,15 @@ class Tournament(Base):
 
     @property
     def is_populated(self):
-        """ Whether the sets from this tournament have been retrieved. """
+        """ Whether the sets from this event have been retrieved. """
         return len(self.sets) > 0
 
 
 class Player(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     sgg_id = Column(Integer, nullable=True, index=True)
-    name = Column(String, nullable=False)
-    country = Column(String, nullable=True)
+    name = Column(Text, nullable=False)
+    country = Column(Text, nullable=True)
 
     won_sets = relationship('Set',
                             foreign_keys="Set.winning_player_id",
@@ -157,8 +166,8 @@ class Player(Base):
         If the player has no external IDs at all.
 
         Since there is no way to be sure, a lot of duplicate names may exist
-        under different anonymous user (1 per tournament). This does NOT mean
-        they don't have an account, but merely that the tournament theese results are
+        under different anonymous user (1 per event). This does NOT mean
+        they don't have an account, but merely that the event these results are
         from did not have the player as a verified attendee.
 
         Unfortunately, because of the large data set there are bound to many
@@ -167,17 +176,9 @@ class Player(Base):
         return not any([self.sgg_id])  # Add challonge, etc if we add them later
 
 
-class SetState(Enum):
-    UNVERIFIED = 0  # At least one player is not a verified participant.
-    VERIFIED_OK = 100  # All participants are verified
-    ANONYMOUS = -1  # At least one player is an anonymous entry and cannot be linked to a Player.
-    # Anonymous entries have to be manually fixed.
-    IGNORE = -99  # Set is manually designated to be ignored.
-
-
 class Set(Base):
     """
-    A set between two players in a Tournament.
+    A set between two players in a Event.
 
     The round specified the order in which sets must be processed.
 
@@ -193,8 +194,8 @@ class Set(Base):
     id = Column(Integer, primary_key=True)
     order = Column(Integer, nullable=False)  # Order index
 
-    tournament_id = Column(Integer, ForeignKey('tournament.id'), nullable=False)
-    tournament = relationship("Tournament", back_populates="sets")
+    event_id = Column(Integer, ForeignKey('event.id'), nullable=False)
+    event = relationship("Event", back_populates="sets")
 
     winning_player_id = Column(Integer, ForeignKey('player.id'), nullable=False)
     winning_player = relationship("Player", foreign_keys=[winning_player_id],
@@ -216,8 +217,8 @@ class Set(Base):
 class Ranking(Base):
     """ A ranking system and its associated configurations. """
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)  # Display name for a ranking
-    algorithm = Column(String, nullable=False)  # Eg.: elo, glicko, ...
+    name = Column(Text, nullable=False)  # Display name for a ranking
+    algorithm = Column(Text, nullable=False)  # Eg.: elo, glicko, ...
 
     algorithm_params = Column(JSONB, default=dict)  # Non-mutable. Must assign to field.
     # Values in "algorithm_params" depends on algorithm used.
@@ -230,7 +231,7 @@ class RankingPeriod(Base):
     These serve both historical views and as a cache of intermediate results.
     """
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)  # Display name for a ranking
+    name = Column(Text, nullable=False)  # Display name for a ranking
     start_date = Column(DateTime, nullable=False)  # Date the ranking period started
     end_date = Column(DateTime, nullable=False)  # Date the ranking period ended
 
@@ -258,7 +259,7 @@ class PlayerRanking(Base):
 
 
 GameSchema = sqlalchemy_to_pydantic(Game)
-TournamentSchema = sqlalchemy_to_pydantic(Tournament)
+EventSchema = sqlalchemy_to_pydantic(Event)
 PlayerSchema = sqlalchemy_to_pydantic(Player)
 SetSchema = sqlalchemy_to_pydantic(Set)
 RankingSchema = sqlalchemy_to_pydantic(Ranking)

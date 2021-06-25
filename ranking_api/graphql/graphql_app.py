@@ -5,7 +5,7 @@ from starlette.graphql import GraphQLApp
 # graphql implementation for now).
 # See: https://www.starlette.io/graphql/
 
-from ranking_api.graphql.model import TournamentModel
+from ranking_api.graphql.graphql_model import TournamentModel
 
 
 class Query(graphene.ObjectType):

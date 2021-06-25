@@ -7,4 +7,4 @@ renew_tables()
 
 session = get_session()
 
-pp(session.query(Tournament).all())
+pp(session.query(Event).all())
