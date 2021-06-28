@@ -82,9 +82,14 @@ class EventState(Enum):
     IGNORE = -99  # Event is not suitable. Eg. A squad strike event
 
 
-class GameFormat(Enum):
+class EventFormat(Enum):
     SINGLES = 1
     DOUBLES = 2
+
+
+class EventType(Enum):
+    ELIMINATION = 1  # Includes single + double elim, as well as round-robin
+    LADDER = 2
 
 
 class SetState(Enum):
@@ -98,12 +103,8 @@ class SetState(Enum):
 class Game(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     sgg_id = Column(Integer, nullable=True, index=True)
-    name = Column(Text, nullable=False)
-    format_code = Column(Integer, nullable=False)
-
-    @property
-    def format(self):
-        return GameFormat(self.format_code)
+    code = Column(Text, nullable=False)  # TODO: validate: no spaces, all lower
+    display_name = Column(Text, nullable=False)
 
 
 class Event(Base):
@@ -112,17 +113,22 @@ class Event(Base):
     sgg_event_id = Column(Integer, nullable=True, index=True)  # smashgg event_id
     # Add other providers here (challonge, ...)
     name = Column(Text, nullable=False)
-    type = Column(Text, nullable=True)  # Eg. singles, double elimination, round-robin, mixed, ...
+    note = Column(Text, nullable=True)  # Additional notes that can be given
     country = Column(Text, nullable=True)
     end_date = Column(DateTime, nullable=False)
     num_entrants = Column(Integer, nullable=False)
-    state_code = Column(Integer, nullable=True)
+    type_code = Column(Integer, nullable=False)
+    format_code = Column(Integer, nullable=False)
 
     sets = relationship("Set", back_populates="event")
 
     @property
-    def state(self):
-        return GameFormat(self.state_code)
+    def type(self):
+        return EventType(self.type_code)
+
+    @property
+    def format(self):
+        return EventFormat(self.format_code)
 
     @property
     def is_populated(self):
@@ -158,7 +164,7 @@ class Player(Base):
     @property
     def verified_sets(self):
         """ Returns all sets that are verified. """
-        return [s for s in self.sets if s.state == SetState.VERIFIED_OK]
+        return [s for s in self.sets if s.format == SetState.VERIFIED_OK]
 
     @property
     def is_anonymous(self):
@@ -176,6 +182,7 @@ class Player(Base):
         return not any([self.sgg_id])  # Add challonge, etc if we add them later
 
 
+# TODO: Set currently assumes 1v1 - should be able to support teams so we can do team ratings
 class Set(Base):
     """
     A set between two players in a Event.
